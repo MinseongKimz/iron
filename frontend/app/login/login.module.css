@@ -1,0 +1,77 @@
+.container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    background-color: #121212;
+    color: #e0e0e0;
+}
+
+.card {
+    background-color: #1e1e1e;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    width: 100%;
+    max-width: 400px;
+}
+
+.title {
+    text-align: center;
+    margin-bottom: 2rem;
+    color: #00e676;
+    /* Green accent */
+    font-size: 2rem;
+}
+
+.form {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+}
+
+.inputGroup {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.inputGroup label {
+    font-size: 0.9rem;
+    color: #aaa;
+}
+
+.inputGroup input {
+    padding: 0.8rem;
+    border-radius: 6px;
+    border: 1px solid #333;
+    background-color: #2d2d2d;
+    color: white;
+    font-size: 1rem;
+}
+
+.inputGroup input:focus {
+    outline: none;
+    border-color: #00e676;
+}
+
+.button {
+    padding: 1rem;
+    background-color: #00e676;
+    color: black;
+    border: none;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 1rem;
+    transition: background-color 0.2s;
+}
+
+.button:hover {
+    background-color: #00c853;
+}
+
+.button:disabled {
+    background-color: #555;
+    cursor: not-allowed;
+}
