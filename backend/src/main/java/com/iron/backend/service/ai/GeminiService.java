@@ -1,9 +1,10 @@
 package com.iron.backend.service.ai;
 
-import com.google.genai.Client;
-import com.google.genai.types.GenerateContentResponse;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.iron.backend.dto.AiWorkoutResult;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -12,89 +13,79 @@ import org.springframework.stereotype.Service;
 @RequiredArgsConstructor
 public class GeminiService {
 
-    // Removed @Value injection. API Key must be provided by result of User lookup.
+    private final GeminiApiClient geminiApiClient;
+    private final ObjectMapper objectMapper;
 
-    public String parseWorkoutLog(String apiKey, String rawText) {
-        if (apiKey == null || apiKey.isEmpty()) {
-            throw new IllegalStateException("Gemini API 키가 제공되지 않았습니다.");
-        }
+    /**
+     * 사용자의 운동 로그 텍스트를 분석하여 구조화된 데이터(AiWorkoutResult)로 반환합니다.
+     *
+     * @param apiKey  사용자의 Gemini API 키
+     * @param rawText 사용자가 입력한 운동 로그 텍스트
+     * @return 분석된 운동 결과 DTO
+     */
+    public AiWorkoutResult parseWorkoutLog(String apiKey, String rawText) {
+        validateInput(apiKey, rawText);
 
-        // Mock for testing
+        // 1. 테스트용 더미 응답 처리
         if (apiKey.startsWith("dummy")) {
-            return """
-                {
-                  "workout_date": "2026-01-31",
-                  "exercises": [
-                    { 
-                      "name": "벤치프레스", 
-                      "main_category": "가슴",
-                      "sub_category": "프리웨이트",
-                      "sets": [
-                        { "weight": 60, "reps": 10, "isWarmup": false },
-                        { "weight": 60, "reps": 10, "isWarmup": false },
-                        { "weight": 60, "reps": 10, "isWarmup": false },
-                        { "weight": 60, "reps": 10, "isWarmup": false },
-                        { "weight": 60, "reps": 10, "isWarmup": false }
-                      ] 
-                    },
-                    { 
-                      "name": "인클라인 덤벨 프레스", 
-                      "main_category": "가슴",
-                      "sub_category": "덤벨",
-                      "sets": [
-                        { "weight": 20, "reps": 10, "isWarmup": false },
-                        { "weight": 20, "reps": 10, "isWarmup": false },
-                        { "weight": 20, "reps": 10, "isWarmup": false },
-                        { "weight": 20, "reps": 10, "isWarmup": false }
-                      ] 
-                    },
-                    { 
-                      "name": "딥스", 
-                      "main_category": "가슴",
-                      "sub_category": "맨몸",
-                      "sets": [
-                        { "weight": 0, "reps": 10, "isWarmup": false },
-                        { "weight": 0, "reps": 10, "isWarmup": false },
-                        { "weight": 0, "reps": 10, "isWarmup": false },
-                        { "weight": 0, "reps": 10, "isWarmup": false }
-                      ] 
-                    },
-                    { 
-                      "name": "케이블 크로스오버", 
-                      "main_category": "가슴",
-                      "sub_category": "케이블",
-                      "sets": [
-                        { "weight": 15, "reps": 12, "isWarmup": false },
-                        { "weight": 15, "reps": 12, "isWarmup": false },
-                        { "weight": 15, "reps": 12, "isWarmup": false },
-                        { "weight": 15, "reps": 12, "isWarmup": false }
-                      ] 
-                    }
-                  ],
-                  "feedback": "테스트 데이터: 오늘은 가슴을 찢으셨군요! 대단합니다."
-                }
-                """;
+            return getDummyData();
         }
 
+        // 2. 프롬프트 생성
+        String prompt = buildPrompt(rawText);
+
+        // 3. API 호출 및 파싱
         try {
-            Client client = Client.builder().apiKey(apiKey).build();
-
-            String prompt = buildPrompt(rawText);
-            
-            GenerateContentResponse response = client.models.generateContent(
-                "gemini-2.5-flash-lite", 
-                prompt,
-                null
-            );
-
-            return response.text();
-        } catch (Exception e) {
-            log.error("Gemini API 호출 중 오류 발생", e);
+            String rawJson = geminiApiClient.generateContent(apiKey, prompt);
+            return parseResponse(rawJson);
+        } catch (RuntimeException e) {
+            // 이미 처리된 예외는 그대로 던짐 (parseResponse 등에서 발생한 예외)
+            if (e.getMessage().contains("AI 응답을 분석하는 도중")) {
+                throw e;
+            }
+            // 그 외 API 호출 오류 등
             throw new RuntimeException("AI를 통한 운동 로그 분석 실패", e);
         }
     }
 
-    // Removed analyzeProgressiveOverload - this is now Logic driven in AnalysisService
+    private void validateInput(String apiKey, String rawText) {
+        if (apiKey == null || apiKey.isEmpty()) {
+            throw new IllegalStateException("Gemini API 키가 제공되지 않았습니다.");
+        }
+        if (rawText == null || rawText.trim().isEmpty()) {
+            throw new IllegalArgumentException("분석할 운동 로그가 없습니다.");
+        }
+    }
+
+    private AiWorkoutResult parseResponse(String rawJson) {
+        try {
+            String cleanedJson = cleanJson(rawJson);
+            return objectMapper.readValue(cleanedJson, AiWorkoutResult.class);
+        } catch (Exception e) {
+            log.error("Gemini 응답 파싱 실패. Raw JSON: {}", rawJson, e);
+            throw new RuntimeException("AI 응답을 분석하는 도중 오류가 발생했습니다.", e);
+        }
+    }
+
+    /**
+     * 마크다운 코드 블록(```json ... ```)을 제거하고 순수 JSON 문자열만 추출합니다.
+     */
+    private String cleanJson(String jsonResponse) {
+        if (jsonResponse == null) return "{}";
+        
+        String result = jsonResponse.trim();
+        if (result.startsWith("```json")) {
+            result = result.substring(7);
+        } else if (result.startsWith("```")) {
+            result = result.substring(3);
+        }
+
+        if (result.endsWith("```")) {
+            result = result.substring(0, result.length() - 3);
+        }
+        
+        return result.trim();
+    }
 
     private String buildPrompt(String rawText) {
         return """
@@ -150,4 +141,67 @@ public class GeminiService {
             오직 JSON만 반환하시오.
             """.formatted(rawText);
     }
+
+    // 테스트를 위한 더미 데이터 반환
+    private AiWorkoutResult getDummyData() {
+        try {
+            String dummyJson = """
+                {
+                  "workout_date": "2026-01-31",
+                  "exercises": [
+                    { 
+                      "name": "벤치프레스", 
+                      "main_category": "가슴",
+                      "sub_category": "프리웨이트",
+                      "sets": [
+                        { "weight": 60, "reps": 10, "isWarmup": false },
+                        { "weight": 60, "reps": 10, "isWarmup": false },
+                        { "weight": 60, "reps": 10, "isWarmup": false },
+                        { "weight": 60, "reps": 10, "isWarmup": false },
+                        { "weight": 60, "reps": 10, "isWarmup": false }
+                      ] 
+                    },
+                    { 
+                      "name": "인클라인 덤벨 프레스", 
+                      "main_category": "가슴",
+                      "sub_category": "덤벨",
+                      "sets": [
+                        { "weight": 20, "reps": 10, "isWarmup": false },
+                        { "weight": 20, "reps": 10, "isWarmup": false },
+                        { "weight": 20, "reps": 10, "isWarmup": false },
+                        { "weight": 20, "reps": 10, "isWarmup": false }
+                      ] 
+                    },
+                    { 
+                      "name": "딥스", 
+                      "main_category": "가슴",
+                      "sub_category": "맨몸",
+                      "sets": [
+                        { "weight": 0, "reps": 10, "isWarmup": false },
+                        { "weight": 0, "reps": 10, "isWarmup": false },
+                        { "weight": 0, "reps": 10, "isWarmup": false },
+                        { "weight": 0, "reps": 10, "isWarmup": false }
+                      ] 
+                    },
+                    { 
+                      "name": "케이블 크로스오버", 
+                      "main_category": "가슴",
+                      "sub_category": "케이블",
+                      "sets": [
+                        { "weight": 15, "reps": 12, "isWarmup": false },
+                        { "weight": 15, "reps": 12, "isWarmup": false },
+                        { "weight": 15, "reps": 12, "isWarmup": false },
+                        { "weight": 15, "reps": 12, "isWarmup": false }
+                      ] 
+                    }
+                  ],
+                  "feedback": "테스트 데이터: 오늘은 가슴을 찢으셨군요! 대단합니다."
+                }
+                """;
+            return objectMapper.readValue(dummyJson, AiWorkoutResult.class);
+        } catch (Exception e) {
+            throw new RuntimeException("더미 데이터 파싱 실패", e);
+        }
+    }
 }
+

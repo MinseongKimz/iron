@@ -6,9 +6,9 @@ import com.iron.backend.domain.workout.WorkoutSet;
 import com.iron.backend.domain.workout.WorkoutSet;
 import com.iron.backend.repository.WorkoutSessionRepository;
 import com.iron.backend.repository.WorkoutSetRepository;
-import com.iron.backend.repository.ExerciseRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -18,12 +18,13 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class WorkoutService {
 
     private final com.iron.backend.service.ai.GeminiService geminiService;
     private final AnalysisService analysisService;
+    private final ExerciseService exerciseService;
     private final com.iron.backend.repository.UserRepository userRepository;
-    private final ExerciseRepository exerciseRepository;
     private final WorkoutSessionRepository workoutSessionRepository;
     private final WorkoutSetRepository workoutSetRepository;
     private final ObjectMapper objectMapper;
@@ -47,25 +48,26 @@ public class WorkoutService {
         }
 
                             // 2. Gemini를 통해 텍스트 분석 (User's API Key)
-        String jsonResponse = geminiService.parseWorkoutLog(user.getGeminiApiKey(), logDto.getRawInput());
-        System.out.println("Gemini Raw Response: " + jsonResponse); // Debug Log
+        // Refactored: GeminiService now returns DTO directly
+        com.iron.backend.dto.AiWorkoutResult parsedResult;
+        try {
+             parsedResult = geminiService.parseWorkoutLog(user.getGeminiApiKey(), logDto.getRawInput());
+        } catch (Exception e) {
+             // Handle or rethrow? Service already throws RuntimeException
+             throw e;
+        }
+        
+        log.info("Gemini Parsed Result: {}", parsedResult);
         
         try {
-            // Clean JSON
-            if (jsonResponse.startsWith("```json")) {
-                jsonResponse = jsonResponse.substring(7);
-                if (jsonResponse.endsWith("```")) {
-                    jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
-                }
-            } else if (jsonResponse.startsWith("```")) {
-                jsonResponse = jsonResponse.substring(3);
-                 if (jsonResponse.endsWith("```")) {
-                    jsonResponse = jsonResponse.substring(0, jsonResponse.length() - 3);
-                }
-            }
+            // JSON cleaning/parsing logic removed as it's handled in GeminiService now.
             
-            // JSON -> DTO Parsing
-            com.iron.backend.dto.AiWorkoutResult parsedResult = objectMapper.readValue(jsonResponse, com.iron.backend.dto.AiWorkoutResult.class);
+            String jsonResponse = ""; // Used for response
+            try {
+                jsonResponse = objectMapper.writeValueAsString(parsedResult);
+            } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+                 jsonResponse = "{}"; // Fallback
+            }
 
             // 3. Logic-based Analysis (Progressive Overload)
             StringBuilder feedbackBuilder = new StringBuilder();
@@ -78,24 +80,12 @@ public class WorkoutService {
             // Exercises & Sets Persistence & Analysis
             if (parsedResult.getExercises() != null) {
                 for (com.iron.backend.dto.AiWorkoutResult.AiExercise aiExercise : parsedResult.getExercises()) {
-                    // Exercise Find or Create
-                    String exerciseName = aiExercise.getName();
-                    Exercise exercise = exerciseRepository.findByName(exerciseName)
-                            .orElseGet(() -> {
-                                Exercise newEx = new Exercise(exerciseName, 
-                                    aiExercise.getMain_category() != null ? aiExercise.getMain_category() : "OTHER");
-                                newEx.setSubCategory(aiExercise.getSub_category());
-                                return exerciseRepository.save(newEx);
-                            });
-                    
-                    // Update category if logic exists and current is "OTHER" or null
-                    if ("OTHER".equals(exercise.getMainCategory()) && aiExercise.getMain_category() != null) {
-                         exercise.setMainCategory(aiExercise.getMain_category());
-                         if (aiExercise.getSub_category() != null) {
-                             exercise.setSubCategory(aiExercise.getSub_category());
-                         }
-                         exerciseRepository.save(exercise);
-                    }
+                    // Refactored: Use ExerciseService
+                    Exercise exercise = exerciseService.findOrCreateExercise(
+                        aiExercise.getName(), 
+                        aiExercise.getMain_category(), 
+                        aiExercise.getSub_category()
+                    );
                     
                     // Sets Create
                     int setOrder = 1;
@@ -124,7 +114,7 @@ public class WorkoutService {
             // ... (Inside logWorkout) ...
             
             // Analyze Overload (Compare this new session vs previous) but keep feedback concise
-            String analysis = analysisService.analyzeProgressiveOverload(user.getUserId(), exerciseName, maxWeight, maxReps);
+            String analysis = analysisService.analyzeProgressiveOverload(user.getUserId(), exercise.getName(), maxWeight, maxReps);
             if (analysis != null && !analysis.isEmpty()) {
                 // Only append if it's significant (This logic can be refined in AnalysisService, but for now we append)
                 // However, user complained about length. Let's make it more compact or rely on UI to hide it.
@@ -194,8 +184,7 @@ public class WorkoutService {
                 com.iron.backend.domain.workout.WorkoutSession session = workoutSessionRepository.findById(newSet.getSessionId())
                         .orElseThrow(() -> new IllegalArgumentException("Session not found for new set"));
                 
-                Exercise exercise = exerciseRepository.findByName(newSet.getExerciseName())
-                        .orElseGet(() -> exerciseRepository.save(new Exercise(newSet.getExerciseName(), "OTHER")));
+                Exercise exercise = exerciseService.findOrCreateExercise(newSet.getExerciseName(), null, null);
 
                 WorkoutSet workoutSet = new WorkoutSet();
                 workoutSet.setWorkoutSession(session);
