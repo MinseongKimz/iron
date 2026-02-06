@@ -7,6 +7,7 @@ import { getApiBaseUrl } from '../utils/apiUtils';
 interface User {
     userId: number;
     username: string;
+    currentStreak?: number;
 }
 
 interface AuthContextType {
@@ -34,7 +35,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const login = async (username: string, apiKey: string) => {
         try {
-            const res = await fetch(`${getApiBaseUrl()}/api/users/login`, {
+            const res = await fetch(`${getApiBaseUrl()}/api/user/login`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ username, apiKey }),
@@ -45,11 +46,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             }
 
             const data = await res.json();
-            const userData = { userId: data.userId, username: data.username };
+            const userData = {
+                userId: data.userId,
+                username: data.username,
+                currentStreak: data.currentStreak
+            };
 
             setUser(userData);
             localStorage.setItem('iron_user', JSON.stringify(userData));
-            router.push('/chat'); // Default to chat after login
+            router.push('/'); // Default to dashboard after login
         } catch (error) {
             console.error("Login Error:", error);
             alert("Login failed. Please check your username (test1/test2).");

@@ -15,4 +15,5 @@ public class UserDto {
     private String nickname;
     private Double currentWeight;
     private Double targetWeight;
+    private Integer currentStreak;
 }

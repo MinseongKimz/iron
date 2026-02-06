@@ -110,9 +110,13 @@ public class WorkoutService {
                             }
                         }
                     }
-
-            // ... (Inside logWorkout) ...
             
+            // 4. Update User Streak (Robust Recalculation)
+            java.time.LocalDate today = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
+            recalculateUserStreak(user.getUserId(), today);
+            
+            // user object in memory might be stale, but we saved it inside recalculateUserStreak if needed.
+
             // Analyze Overload (Compare this new session vs previous) but keep feedback concise
             String analysis = analysisService.analyzeProgressiveOverload(user.getUserId(), exercise.getName(), maxWeight, maxReps);
             if (analysis != null && !analysis.isEmpty()) {
@@ -197,5 +201,46 @@ public class WorkoutService {
                 workoutSetRepository.save(workoutSet);
             }
         }
+    }
+
+    void recalculateUserStreak(Long userId, java.time.LocalDate referenceDate) {
+        // Fetch all distinct workout dates in descending order
+        java.util.List<java.time.LocalDate> dates = workoutSessionRepository.findDistinctWorkoutDatesByUserId(userId);
+        
+        if (dates.isEmpty()) {
+            return;
+        }
+
+        int streak = 0;
+        java.time.LocalDate latest = dates.get(0);
+        
+        // If latest is before yesterday (relative to reference date), streak is broken.
+        if (latest.isBefore(referenceDate.minusDays(1))) {
+             updateUserStreak(userId, 0, latest);
+             return;
+        }
+
+        // Calculate consecutive days from the latest date backwards
+        streak = 1;
+        java.time.LocalDate current = latest;
+        
+        for (int i = 1; i < dates.size(); i++) {
+            java.time.LocalDate prev = dates.get(i);
+            if (prev.equals(current.minusDays(1))) {
+                streak++;
+                current = prev;
+            } else {
+                break;
+            }
+        }
+        
+        updateUserStreak(userId, streak, latest);
+    }
+
+    private void updateUserStreak(Long userId, int streak, java.time.LocalDate lastDate) {
+        com.iron.backend.domain.user.User user = userRepository.findById(userId).orElseThrow();
+        user.setCurrentStreak(streak);
+        user.setLastWorkoutDate(lastDate);
+        userRepository.save(user);
     }
 }

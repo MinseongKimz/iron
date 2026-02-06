@@ -46,7 +46,13 @@ public class User {
     private LocalDateTime updatedAt;
 
     @Column(name = "gemini_api_key")
-    private String geminiApiKey; // Plain text for MVP as requested ("암호화 하던 해서 넣어 놔야겠지?" -> implying security, but for now just field. I will keep it simple as string first, can add weak encryption if needed, but 'test1' accounts usually imply dev mode. User said "encrypt or whatever", I'll stick to cleartext for MVP speed unless specifically asked for AES algo, or just omit if not strictly critical for 'test1'. Actually, I'll store it as String for now to ensure it works.)
+    private String geminiApiKey;
+
+    @Column(name = "current_streak")
+    private Integer currentStreak = 0;
+
+    @Column(name = "last_workout_date")
+    private java.time.LocalDate lastWorkoutDate;
 
     public User(String email, String passwordHash, String nickname) {
         this.email = email;
@@ -56,5 +62,16 @@ public class User {
 
     public void updateGeminiApiKey(String apiKey) {
         this.geminiApiKey = apiKey;
+    }
+
+    public void updateStreak(boolean isConsecutive) {
+        if (currentStreak == null) currentStreak = 0;
+        
+        if (isConsecutive) {
+            this.currentStreak++;
+        } else {
+            this.currentStreak = 1;
+        }
+        this.lastWorkoutDate = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul"));
     }
 }

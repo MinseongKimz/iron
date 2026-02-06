@@ -90,6 +90,12 @@ export default function ChatPage() {
                     <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
                         <h1 className="text-lg font-bold tracking-tight">Iron AI Coach</h1>
+                        {user?.currentStreak && (
+                            <div className="flex items-center gap-1 ml-3 px-2 py-1 bg-surface-hover rounded-full border border-border/50">
+                                <span className="text-sm">🔥</span>
+                                <span className="text-xs font-medium text-foreground">{user.currentStreak}일</span>
+                            </div>
+                        )}
                     </div>
                     <div className="flex items-center gap-3">
                         <input

@@ -10,6 +10,7 @@ export default function BottomNav() {
     if (pathname === '/login') return null;
 
     const navItems = [
+        { href: '/', icon: '🏠', label: '대시보드' },
         { href: '/chat', icon: '🏋️', label: '기록' },
         { href: '/calendar', icon: '📅', label: '달력' },
     ];

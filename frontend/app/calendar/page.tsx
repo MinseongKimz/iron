@@ -152,10 +152,32 @@ export default function CalendarPage() {
     // Tile content for Green Dot
     const tileContent = ({ date, view }: { date: Date, view: string }) => {
         if (view === 'month') {
-            const dateStr = date.toISOString().split('T')[0];
-            if (monthlyDates.includes(dateStr)) {
-                return <div className="w-1.5 h-1.5 bg-[var(--primary)] rounded-full mx-auto mt-1"></div>;
+            const width = date.getDate() < 10 ? '0' : '';
+            const month = (date.getMonth() + 1) < 10 ? '0' + (date.getMonth() + 1) : (date.getMonth() + 1);
+            // Need to match format 'YYYY-MM-DD' returned by API
+            const dateStr = `${date.getFullYear()}-${month}-${width}${date.getDate()}`;
+
+            // Re-using local date calculation as API might return plain string
+            // Actually, simplified ISO check:
+            const isoDate = new Date(date.getTime() - (date.getTimezoneOffset() * 60000)).toISOString().split('T')[0];
+
+            if (monthlyDates.includes(isoDate) || monthlyDates.includes(dateStr)) {
+                return <div style={{
+                    width: '6px',
+                    height: '6px',
+                    backgroundColor: '#22c55e',
+                    borderRadius: '50%',
+                    margin: '4px auto 0'
+                }}></div>;
             }
+        }
+        return null;
+    };
+
+    // Tile class name for Saturday blue text
+    const tileClassName = ({ date, view }: { date: Date, view: string }) => {
+        if (view === 'month' && date.getDay() === 6) {
+            return 'saturday-tile';
         }
         return null;
     };
@@ -173,10 +195,16 @@ export default function CalendarPage() {
 
             {/* Custom Styled Calendar Wrapper */}
             <div className="mb-8 p-1 bg-surface rounded-2xl border shadow-sm">
+                <style jsx global>{`
+                    .saturday-tile abbr {
+                        color: #3b82f6 !important;
+                    }
+                `}</style>
                 <Calendar
                     onChange={(val) => setDate(val as Date)}
                     value={date}
                     tileContent={tileContent}
+                    tileClassName={tileClassName}
                     formatDay={(locale, date) => date.getDate().toString()}
                     next2Label={null}
                     prev2Label={null}

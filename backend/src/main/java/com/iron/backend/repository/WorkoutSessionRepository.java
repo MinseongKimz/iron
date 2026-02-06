@@ -9,4 +9,7 @@ import java.time.LocalDate;
 public interface WorkoutSessionRepository extends JpaRepository<WorkoutSession, UUID> {
     List<WorkoutSession> findByUser_UserIdAndWorkoutDate(Long userId, LocalDate workoutDate);
     List<WorkoutSession> findByUser_UserIdAndWorkoutDateBetween(Long userId, LocalDate startDate, LocalDate endDate);
+    
+    @org.springframework.data.jpa.repository.Query("SELECT DISTINCT s.workoutDate FROM WorkoutSession s WHERE s.user.userId = :userId ORDER BY s.workoutDate DESC")
+    List<LocalDate> findDistinctWorkoutDatesByUserId(@org.springframework.data.repository.query.Param("userId") Long userId);
 }

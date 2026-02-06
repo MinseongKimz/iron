@@ -57,6 +57,7 @@ public class UserService {
                 .nickname(user.getNickname())
                 .currentWeight(user.getCurrentWeight())
                 .targetWeight(user.getTargetWeight())
+                .currentStreak(user.getCurrentStreak() != null ? user.getCurrentStreak() : 0)
                 .build();
     }
 }
